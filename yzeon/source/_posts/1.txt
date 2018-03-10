@@ -1,0 +1,78 @@
+由于GFW的原因，随时都可能被墙，所以当你看到这个文章的时候，我不保证你可以正常访问。下面正文开始。
+
+2018-3-8更新
+
+最新网址为 https://javmoo.net/cn
+分析
+目标有清晰的分页和清晰的页面结构，类似下面这样的两种分页可以遍历
+
+https://javmoo.net/cn/page/2
+https://javmoo.net/cn/popular/page/2
+目标并没有使用ajax加载技术，所以在数据抓取上比较简单，可以直接使用xpath
+决定要抓取的信息有：链接地址，标题，番号，发行时间，影片长度，导演，导演url，制作方，制作方url，发行方，发行方url，系列，系列url，标签，演员，封面，图片个数
+番号主页的链接是这样的，https://javmoo.net/cn/movie/5nhh，并没有使用数字编码，而是使用数字+字母的编码
+方案
+一开始的想法比较简单，遍历分页从分页中抓取链接地址，依次请求获取数据，存储。后来发现了一些问题，首先，avio.pw/cn/page/2这个页面通过修改页数不能展示全部的番号，最大值被限定在100，javmoo.net/cn/popular/page/2只有这个可以展示所有番号，但是问题是，如果新添加电影信息，所有的顺序就会被打乱，所以这个方案废弃。
+
+第二个方案，javmoo.net/cn/movie/5nhh，通过遍历链接的id，达到遍历所有电影的目的。
+
+代码如下
+
+#遍历urlid
+#self.sl='0123456789abcdefghijklmnopqrstuvwxyz'
+def get_linkid(self):
+    for i1 in self.sl:
+        for i2 in self.sl:
+            for i3 in self.sl:
+                for i4 in self.sl:
+                    tmp=i1+i2+i3+i4
+                    if self.start_id<tmp:
+                        yield tmp
+                    else:
+                        continue
+通过反复遍历一个字符串，可以获得与目标网站匹配的id，self.start_id是指开始的id，当遍历出的id比这个id大的时候才会返回给对应的函数。当程序出现错误或者接着上次末尾开始运行。
+
+获得链接的id之后，拼接出目标的地址，就可以获取页面内的的信息了。
+
+存储
+CREATE TABLE "av_list" (
+"id"  INTEGER,
+"linkid"  TEXT(10) NOT NULL,
+"title"  TEXT(500),
+"av_id"  TEXT(50),
+"release_date"  TEXT(20),
+"len"  TEXT(20),
+"director"  TEXT(100),
+"studio"  TEXT(100),
+"label"  TEXT(100),
+"series"  TEXT(200),
+"genre"  TEXT(200),
+"stars"  TEXT(300),
+"director_url"  TEXT(10),
+"studio_url"  TEXT(10),
+"label_url"  TEXT(10),
+"series_url"  TEXT(10),
+"bigimage"  TEXT(200),
+"image_len"  INTEGER,
+PRIMARY KEY ("linkid")
+);
+CREATE TABLE "av_error_linkid" (
+"linkid"  TEXT(4) NOT NULL,
+"status_code"  INTEGER,
+"datetime"  TEXT(50),
+PRIMARY KEY ("linkid")
+);
+完整代码
+https://github.com/moozik/avmopw-spider
+是肯定有坑的，一定有坑的，做好自己修改的准备。
+整个站抓下来，sqlite的大小应该是100mb左右--20170427
+
+avio.pw番号爬虫
+使用方法
+抓取来自avio.pw的信息，并插入数据库，id区间为0000-zzzz get_av_spider.py -i -s 0000 -e zzzz
+
+抓取来自avio.pw的信息，不进行存储操作 get_av_spider.py -s 1000 -e 2000
+
+接着上次抓取并使用代理 get_av_spider.py -a -p http://127.0.0.1:1080
+
+-h(-help):使用说明 -i(-insert):插入数据库 -s(-start):开始id(0000,1ddd,36wq) -e(-end):结束id(0000,1ddd,36wq) -a(-auto):获取当前最新的一个id和网站最新的一个id，补全新增数据 -p(-proxies):使用指定的https代理服务器或SOCKS5代理服务器。例如：-p http://127.0.0.1:1080,-p socks5://127.0.0.1:52772
